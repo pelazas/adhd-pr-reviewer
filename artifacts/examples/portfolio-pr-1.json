@@ -1,0 +1,18 @@
+{
+  "startUrl": "https://portfolio-three-beta-75.vercel.app/",
+  "viewport": {"width": 1080, "height": 1056},
+  "steps": [
+    {"action": "waitForLoad"},
+    {"action": "wait", "ms": 2500},
+    {"action": "scroll", "y": 700, "durationMs": 4500},
+    {"action": "wait", "ms": 2000},
+    {"action": "scroll", "y": 1450, "durationMs": 4500},
+    {"action": "wait", "ms": 2000},
+    {"action": "scroll", "y": 2250, "durationMs": 4500},
+    {"action": "wait", "ms": 2000},
+    {"action": "scroll", "y": 3050, "durationMs": 4500},
+    {"action": "wait", "ms": 2000},
+    {"action": "scroll", "y": 3850, "durationMs": 4500},
+    {"action": "wait", "ms": 2500}
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["startUrl", "viewport", "steps"],
+  "properties": {
+    "startUrl": {"type": "string", "format": "uri"},
+    "viewport": {"type": "object", "required": ["width", "height"], "properties": {"width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}}},
+    "steps": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"oneOf": [
+      {"type": "object", "required": ["action"], "properties": {"action": {"const": "waitForLoad"}}},
+      {"type": "object", "required": ["action", "ms"], "properties": {"action": {"const": "wait"}, "ms": {"type": "integer", "minimum": 0, "maximum": 14000}}},
+      {"type": "object", "required": ["action", "y"], "properties": {"action": {"const": "scroll"}, "y": {"type": "number", "minimum": 0}, "durationMs": {"type": "integer", "minimum": 250, "maximum": 14000}}},
+      {"type": "object", "required": ["action", "url"], "properties": {"action": {"const": "goto"}, "url": {"type": "string", "format": "uri"}}},
+      {"type": "object", "required": ["action", "postcondition"], "properties": {"action": {"const": "click"}, "selector": {"type": "string"}, "text": {"type": "string"}, "role": {"type": "string"}, "name": {"type": "string"}, "postcondition": {"type": "object"}}},
+      {"type": "object", "required": ["action", "selector", "value", "postcondition"], "properties": {"action": {"const": "fill"}, "selector": {"type": "string"}, "value": {"type": "string"}, "postcondition": {"type": "object"}}},
+      {"type": "object", "required": ["action", "selector"], "properties": {"action": {"const": "hover"}, "selector": {"type": "string"}}},
+      {"type": "object", "required": ["action", "key"], "properties": {"action": {"const": "press"}, "key": {"type": "string"}}}
+    ]}}
+  }
+}
