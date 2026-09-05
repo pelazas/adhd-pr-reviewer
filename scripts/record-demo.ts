@@ -157,9 +157,14 @@ const approachTarget = async (page: Page, input: Target, viewportHeight: number)
     const rect = (element as HTMLElement).getBoundingClientRect();
     return window.scrollY + rect.top + rect.height / 2 - paneH * 0.42;
   }, viewportHeight);
-  await slowScroll(page, Math.max(0, desired), approachDurationMs);
+  const current = await page.evaluate("window.scrollY") as number;
+  const distance = Math.abs(Math.max(0, desired) - current);
+  if (distance > 24) {
+    const duration = Math.min(approachDurationMs, Math.max(350, Math.round(distance * 0.9)));
+    await slowScroll(page, Math.max(0, desired), duration);
+  }
   await glideTo(page, targetElement);
-  await page.waitForTimeout(160);
+  await page.waitForTimeout(120);
 };
 
 const measureBeat = async (page: Page, item: Plan["beats"][number], viewport: Plan["viewport"]): Promise<Omit<EmphasisBeat, "startMs" | "endMs" | "approachStartMs">> => {
