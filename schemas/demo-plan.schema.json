@@ -22,7 +22,8 @@
       {"type": "object", "required": ["action", "postcondition"], "properties": {"action": {"const": "click"}, "selector": {"type": "string"}, "text": {"type": "string"}, "role": {"type": "string"}, "name": {"type": "string"}, "postcondition": {"type": "object"}}},
       {"type": "object", "required": ["action", "selector", "value", "postcondition"], "properties": {"action": {"const": "fill"}, "selector": {"type": "string"}, "value": {"type": "string"}, "postcondition": {"type": "object"}}},
       {"type": "object", "required": ["action", "selector"], "properties": {"action": {"const": "hover"}, "selector": {"type": "string"}}},
-      {"type": "object", "required": ["action", "key"], "properties": {"action": {"const": "press"}, "key": {"type": "string"}}}
+      {"type": "object", "required": ["action", "key"], "properties": {"action": {"const": "press"}, "key": {"type": "string"}}},
+      {"type": "object", "required": ["action"], "properties": {"action": {"const": "select"}, "selector": {"type": "string"}, "text": {"type": "string"}, "role": {"type": "string"}, "name": {"type": "string"}}}
       ]}}
     }, "additionalProperties": false}}
   }
