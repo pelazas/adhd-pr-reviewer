@@ -7,18 +7,27 @@ import {chromium, type Locator, type Page} from "playwright";
 import {z} from "zod";
 
 const actionTimeout = 15_000;
-const transitionMs = 1_600;
+const approachDurationMs = 1_800;
+const approachOverrunMs = 400;
+const inspectOverrunMs = 400;
 
 const postcondition = z.object({selector: z.string().optional(), text: z.string().optional(), urlIncludes: z.string().optional()}).refine((value) => Object.keys(value).length > 0);
+const point = {
+  selector: z.string().optional(),
+  text: z.string().optional(),
+  role: z.string().optional(),
+  name: z.string().optional(),
+};
 const step = z.discriminatedUnion("action", [
   z.object({action: z.literal("goto"), url: z.string().url()}),
   z.object({action: z.literal("waitForLoad")}),
   z.object({action: z.literal("wait"), ms: z.number().int().min(0).max(14_000)}),
   z.object({action: z.literal("scroll"), y: z.number().nonnegative(), durationMs: z.number().int().min(250).max(14_000).optional()}),
-  z.object({action: z.literal("click"), selector: z.string().optional(), text: z.string().optional(), role: z.string().optional(), name: z.string().optional(), postcondition}),
+  z.object({action: z.literal("click"), ...point, postcondition}),
   z.object({action: z.literal("fill"), selector: z.string(), value: z.string(), postcondition}),
   z.object({action: z.literal("hover"), selector: z.string()}),
   z.object({action: z.literal("press"), key: z.string()}),
+  z.object({action: z.literal("select"), ...point}),
 ]);
 const target = z.union([
   z.object({role: z.string().min(1), name: z.string().min(1)}).strict(),
@@ -37,31 +46,64 @@ const planSchema = z.object({
   viewport: z.object({width: z.number().int().positive(), height: z.number().int().positive()}),
   beats: z.array(beat).min(1).max(8),
 }).superRefine((plan, context) => {
-  if (plan.beats.reduce((total, item) => total + item.steps.length, 0) > 16) context.addIssue({code: "custom", message: "beats may contain at most 16 total steps"});
+  if (plan.beats.reduce((total, item) => total + item.steps.length, 0) > 32) context.addIssue({code: "custom", message: "beats may contain at most 32 total steps"});
 });
 const captionsSchema = z.array(z.object({text: z.string(), startMs: z.number(), endMs: z.number()}));
 
 type Plan = z.infer<typeof planSchema>;
 type Step = z.infer<typeof step>;
 type Target = z.infer<typeof target>;
-type EmphasisBeat = {startMs: number; endMs: number; scale: number; x: number; y: number; rect: {x: number; y: number; w: number; h: number} | null};
+type EmphasisBeat = {startMs: number; endMs: number; scale: number; x: number; y: number; rect: null; approachStartMs: number};
 
-const allowedUrl = (targetUrl: string, startUrl: string) => {
-  const url = new URL(targetUrl);
-  const start = new URL(startUrl);
-  return ["http:", "https:"].includes(url.protocol) && (url.hostname === start.hostname || url.hostname === "localhost" || url.hostname === "127.0.0.1");
+const isSetup = (action: Step["action"]) => action === "goto" || action === "waitForLoad" || action === "wait" || action === "scroll";
+
+const planHosts = (plan: Plan) => {
+  const hosts = new Set<string>([new URL(plan.startUrl).hostname, "localhost", "127.0.0.1"]);
+  for (const item of plan.beats) {
+    for (const input of item.steps) {
+      if (input.action === "goto") hosts.add(new URL(input.url).hostname);
+    }
+  }
+  return hosts;
 };
 
-const locatorFor = (page: Page, input: Extract<Step, {action: "click"}>) => {
+const allowedUrl = (targetUrl: string, hosts: Set<string>) => {
+  const url = new URL(targetUrl);
+  return ["http:", "https:"].includes(url.protocol) && hosts.has(url.hostname);
+};
+
+const assertPageHost = (page: Page, hosts: Set<string>) => {
+  if (!allowedUrl(page.url(), hosts)) throw new Error(`Disallowed URL: ${page.url()}`);
+};
+
+const installCursor = () => {
+  const draw = () => {
+    if (document.getElementById("adhd-cursor")) return;
+    const el = document.createElement("div");
+    el.id = "adhd-cursor";
+    el.setAttribute("aria-hidden", "true");
+    el.style.cssText = "position:fixed;z-index:2147483647;width:28px;height:28px;pointer-events:none;left:0;top:0;margin:0;transform:translate(-2px,-1px);";
+    el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24"><path fill="#fff" stroke="#111" stroke-width="1.25" d="M4.2 2.4v17.8l5.1-5.1 2.1 4.9 2.3-.9-2.1-4.9 6.7-1.1z"/></svg>';
+    document.documentElement.appendChild(el);
+    document.addEventListener("mousemove", (event) => {
+      el.style.left = `${event.clientX}px`;
+      el.style.top = `${event.clientY}px`;
+    }, true);
+  };
+  draw();
+  document.addEventListener("DOMContentLoaded", draw);
+};
+
+const pointLocator = (page: Page, input: {selector?: string; text?: string; role?: string; name?: string}): Locator => {
   if (input.selector) return page.locator(input.selector);
-  if (input.text) return page.getByText(input.text, {exact: true});
+  if (input.text) return page.getByText(input.text, {exact: false}).first();
   if (input.role && input.name) return page.getByRole(input.role as never, {name: input.name, exact: true});
-  throw new Error("click needs selector, text, or role and name");
+  throw new Error("needs selector, text, or role and name");
 };
 
 const targetLocator = (page: Page, input: Target): Locator => {
   if ("selector" in input) return page.locator(input.selector);
-  if ("text" in input) return page.getByText(input.text, {exact: true});
+  if ("text" in input) return page.getByText(input.text, {exact: false}).first();
   return page.getByRole(input.role as never, {name: input.name, exact: true});
 };
 
@@ -71,27 +113,112 @@ const waitForPostcondition = async (page: Page, value: z.infer<typeof postcondit
   if (value.urlIncludes) await page.waitForURL(`**${value.urlIncludes}**`, {timeout: actionTimeout});
 };
 
-const slowScroll = async (page: Page, y: number, durationMs = 4_500) => {
-  const start = await page.evaluate("window.scrollY") as number;
-  for (let index = 1; index <= 45; index++) {
-    const progress = index / 45;
-    await page.evaluate(`window.scrollTo(0, ${start + (y - start) * (1 - Math.pow(1 - progress, 3))})`);
-    await page.waitForTimeout(durationMs / 45);
+const dismissConsent = async (page: Page) => {
+  const names = [/^accept all$/i, /^accept$/i, /i understand/i, /^got it$/i];
+  for (const name of names) {
+    const button = page.getByRole("button", {name});
+    if (!await button.first().isVisible().catch(() => false)) continue;
+    await button.first().click({timeout: 1_500}).catch(() => undefined);
+    await page.waitForTimeout(200);
+    return;
   }
 };
 
-const runStep = async (page: Page, input: Step, startUrl: string) => {
+const loadPage = async (page: Page, url: string, hosts: Set<string>) => {
+  if (!allowedUrl(url, hosts)) throw new Error(`Disallowed URL: ${url}`);
+  await page.goto(url, {waitUntil: "domcontentloaded", timeout: actionTimeout});
+  await page.waitForLoadState("load", {timeout: actionTimeout}).catch(() => undefined);
+  await dismissConsent(page);
+  assertPageHost(page, hosts);
+};
+
+const slowScroll = async (page: Page, y: number, durationMs = approachDurationMs) => {
+  const start = await page.evaluate("window.scrollY") as number;
+  for (let index = 1; index <= 36; index++) {
+    const progress = index / 36;
+    await page.evaluate(`window.scrollTo(0, ${start + (y - start) * (1 - Math.pow(1 - progress, 3))})`);
+    await page.waitForTimeout(durationMs / 36);
+  }
+};
+
+const glideTo = async (page: Page, locator: Locator) => {
+  await locator.waitFor({state: "visible", timeout: actionTimeout});
+  await locator.scrollIntoViewIfNeeded().catch(() => undefined);
+  const box = await locator.boundingBox();
+  if (!box) throw new Error("Target has no bounding box");
+  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height / 2, 28), {steps: 16});
+  return box;
+};
+
+const approachTarget = async (page: Page, input: Target, viewportHeight: number) => {
+  const targetElement = targetLocator(page, input);
+  await targetElement.waitFor({state: "visible", timeout: actionTimeout});
+  const desired = await targetElement.evaluate((element, paneH) => {
+    const rect = (element as HTMLElement).getBoundingClientRect();
+    return window.scrollY + rect.top + rect.height / 2 - paneH * 0.42;
+  }, viewportHeight);
+  await slowScroll(page, Math.max(0, desired), approachDurationMs);
+  await glideTo(page, targetElement);
+  await page.waitForTimeout(160);
+};
+
+const measureBeat = async (page: Page, item: Plan["beats"][number], viewport: Plan["viewport"]): Promise<Omit<EmphasisBeat, "startMs" | "endMs" | "approachStartMs">> => {
+  const targetElement = targetLocator(page, item.target);
+  const box = await targetElement.evaluate((element) => {
+    const rect = (element as HTMLElement).getBoundingClientRect();
+    return {cameraX: rect.x + rect.width / 2, cameraY: rect.y + rect.height / 2, x: rect.x, y: rect.y, width: rect.width, height: rect.height};
+  });
+  if (!box || box.width <= 0 || box.height <= 0) throw new Error(`Target for cue "${item.cue}" has no bounding box`);
+  if (box.x >= viewport.width || box.y >= viewport.height || box.x + box.width <= 0 || box.y + box.height <= 0) throw new Error(`Target for cue "${item.cue}" does not intersect the viewport`);
+  return {scale: item.scale ?? (item.wide ? 1.05 : 1.15), x: box.cameraX / viewport.width, y: box.cameraY / viewport.height, rect: null};
+};
+
+const runStep = async (page: Page, input: Step, hosts: Set<string>) => {
   switch (input.action) {
     case "goto":
-      if (!allowedUrl(input.url, startUrl)) throw new Error(`Disallowed URL: ${input.url}`);
-      await page.goto(input.url, {waitUntil: "networkidle", timeout: actionTimeout}); break;
-    case "waitForLoad": await page.waitForLoadState("networkidle", {timeout: actionTimeout}); break;
-    case "wait": await page.waitForTimeout(input.ms); break;
-    case "scroll": await slowScroll(page, input.y, input.durationMs); break;
-    case "click": await locatorFor(page, input).click({timeout: actionTimeout}); await waitForPostcondition(page, input.postcondition); break;
-    case "fill": await page.locator(input.selector).fill(input.value, {timeout: actionTimeout}); await waitForPostcondition(page, input.postcondition); break;
-    case "hover": await page.locator(input.selector).hover({timeout: actionTimeout}); break;
-    case "press": await page.keyboard.press(input.key); break;
+      await loadPage(page, input.url, hosts); break;
+    case "waitForLoad":
+      await page.waitForLoadState("load", {timeout: actionTimeout}).catch(() => undefined); break;
+    case "wait":
+      await page.waitForTimeout(input.ms); break;
+    case "scroll":
+      await slowScroll(page, input.y, input.durationMs ?? approachDurationMs); break;
+    case "click": {
+      const locator = pointLocator(page, input);
+      await glideTo(page, locator);
+      await locator.click({timeout: actionTimeout});
+      await waitForPostcondition(page, input.postcondition);
+      assertPageHost(page, hosts);
+      break;
+    }
+    case "fill": {
+      const locator = page.locator(input.selector);
+      await glideTo(page, locator);
+      await locator.click({timeout: actionTimeout});
+      await locator.pressSequentially(input.value, {delay: 60, timeout: actionTimeout});
+      await waitForPostcondition(page, input.postcondition);
+      break;
+    }
+    case "hover": {
+      const locator = page.locator(input.selector);
+      await glideTo(page, locator);
+      await locator.hover({timeout: actionTimeout});
+      break;
+    }
+    case "press":
+      await page.keyboard.press(input.key); break;
+    case "select": {
+      const locator = pointLocator(page, input);
+      const box = await glideTo(page, locator);
+      const y = box.y + Math.min(Math.max(box.height / 2, 4), Math.max(box.height - 4, 4));
+      const from = box.x + Math.min(10, Math.max(2, box.width * 0.06));
+      const to = box.x + box.width - Math.min(10, Math.max(2, box.width * 0.06));
+      await page.mouse.move(from, y, {steps: 8});
+      await page.mouse.down();
+      await page.mouse.move(to, y, {steps: 14});
+      await page.mouse.up();
+      break;
+    }
   }
 };
 
@@ -123,6 +250,8 @@ const waitUntil = async (page: Page, targetNs: bigint) => {
   if (delayMs > 0) await page.waitForTimeout(delayMs);
 };
 
+const leadMs = (item: Plan["beats"][number]) => item.steps.some((input) => input.action === "goto") ? 5_000 : 2_200;
+
 const main = async () => {
   const planPath = process.argv[2];
   if (!planPath) throw new Error("Usage: tsx scripts/record-demo.ts <demo-plan.json>");
@@ -131,7 +260,8 @@ const main = async () => {
   const plan = planSchema.parse(JSON.parse(readFileSync(resolve(planPath), "utf8")));
   const captions = captionsSchema.parse(JSON.parse(readFileSync("public/captions.json", "utf8"))) as Caption[];
   if (!captions.length) throw new Error("public/captions.json is empty");
-  if (!allowedUrl(plan.startUrl, plan.startUrl)) throw new Error("startUrl must be http(s)");
+  const hosts = planHosts(plan);
+  if (!allowedUrl(plan.startUrl, hosts)) throw new Error("startUrl must be http(s)");
   const cues = plan.beats.map((item) => matchCue(item.cue, captions));
   for (let index = 1; index < cues.length; index++) {
     if (cues[index].startMs <= cues[index - 1].startMs) throw new Error("Beat cues must occur once and in narration order");
@@ -141,64 +271,48 @@ const main = async () => {
   mkdirSync("public", {recursive: true});
   const browser = await chromium.launch({headless: true});
   const context = await browser.newContext({viewport: plan.viewport, recordVideo: {dir: resolve("artifacts/recordings"), size: plan.viewport}});
+  await context.addInitScript(installCursor);
   let page: Page | undefined;
   let video: Awaited<ReturnType<Page["video"]>>;
   try {
     const videoStartNs = process.hrtime.bigint();
     page = await context.newPage();
     video = page.video();
-    const setBeat = async (item: Plan["beats"][number], cue: {startMs: number; endMs: number}): Promise<EmphasisBeat> => {
-      for (const input of item.steps) await runStep(page!, input, plan.startUrl);
-      const targetElement = targetLocator(page!, item.target);
-      await targetElement.evaluate((element) => (element as HTMLElement).scrollIntoView({block: "center", inline: "nearest", behavior: "instant"}));
-      await page!.waitForTimeout(300);
-      const box = await targetElement.evaluate((element) => {
-        const heading = element.getBoundingClientRect();
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        const glyphs = range.getClientRects()[0] ?? heading;
-        range.detach();
-        return {
-          cameraX: glyphs.x + glyphs.width / 2,
-          cameraY: glyphs.y + glyphs.height / 2,
-          x: glyphs.x,
-          y: glyphs.y,
-          width: Math.max(glyphs.width, Math.min(heading.width * 0.5, 540)),
-          height: glyphs.height,
-        };
-      });
-      if (!box || box.width <= 0 || box.height <= 0) throw new Error(`Target for cue "${item.cue}" has no bounding box`);
-      if (box.x >= plan.viewport.width || box.y >= plan.viewport.height || box.x + box.width <= 0 || box.y + box.height <= 0) throw new Error(`Target for cue "${item.cue}" does not intersect the viewport`);
-      const pad = 20 / plan.viewport.width;
-      const padY = 16 / plan.viewport.height;
-      const body = 88 / plan.viewport.height;
-      const rect = item.wide ? null : {
-        x: Math.max(0, box.x / plan.viewport.width - pad),
-        y: Math.max(0, box.y / plan.viewport.height - padY),
-        w: Math.min(1, box.width / plan.viewport.width + pad * 2),
-        h: Math.min(1 - Math.max(0, box.y / plan.viewport.height - padY), box.height / plan.viewport.height + padY + body),
-      };
-      return {startMs: cue.startMs, endMs: cue.endMs, scale: item.scale ?? (item.wide ? 1.05 : 1.15), x: box.cameraX / plan.viewport.width, y: box.cameraY / plan.viewport.height, rect};
+    const runSetup = async (item: Plan["beats"][number]) => {
+      for (const input of item.steps.filter((stepInput) => isSetup(stepInput.action))) await runStep(page!, input, hosts);
+    };
+    const runInspect = async (item: Plan["beats"][number]) => {
+      for (const input of item.steps.filter((stepInput) => !isSetup(stepInput.action))) await runStep(page!, input, hosts);
     };
 
-    await page.goto(plan.startUrl, {waitUntil: "domcontentloaded", timeout: actionTimeout});
-    await page.waitForLoadState("networkidle", {timeout: actionTimeout});
-    const emphasis = [await setBeat(plan.beats[0], cues[0])];
+    await loadPage(page, plan.startUrl, hosts);
+    await runSetup(plan.beats[0]);
+    await approachTarget(page, plan.beats[0].target, plan.viewport.height);
+    const first = await measureBeat(page, plan.beats[0], plan.viewport);
     const originNs = process.hrtime.bigint();
     const demoOffsetMs = Number(originNs - videoStartNs) / 1e6;
-    emphasis[0].startMs = 0;
+    const emphasis: EmphasisBeat[] = [{...first, startMs: 0, endMs: cues[0].endMs, approachStartMs: 0}];
+    await runInspect(plan.beats[0]);
     for (let index = 1; index < plan.beats.length; index++) {
       const cueStartNs = originNs + BigInt(Math.round(cues[index].startMs * 1e6));
-      await waitUntil(page, cueStartNs - BigInt(transitionMs * 1e6));
-      const focused = await setBeat(plan.beats[index], cues[index]);
-      const overrunMs = Number(process.hrtime.bigint() - cueStartNs) / 1e6;
-      if (overrunMs > 400) throw new Error(`Transition for cue "${plan.beats[index].cue}" overran its cue by ${Math.round(overrunMs)}ms`);
-      emphasis.push(focused);
+      await waitUntil(page, originNs + BigInt(Math.round(Math.max(0, cues[index].startMs - leadMs(plan.beats[index])) * 1e6)));
+      const approachStartMs = Number(process.hrtime.bigint() - originNs) / 1e6;
+      await runSetup(plan.beats[index]);
+      await approachTarget(page, plan.beats[index].target, plan.viewport.height);
+      const arrivedMs = Number(process.hrtime.bigint() - originNs) / 1e6;
+      if (arrivedMs > cues[index].startMs + approachOverrunMs) throw new Error(`Approach for cue "${plan.beats[index].cue}" overran its cue by ${Math.round(arrivedMs - cues[index].startMs)}ms`);
+      const focused = await measureBeat(page, plan.beats[index], plan.viewport);
+      emphasis.push({...focused, startMs: arrivedMs, endMs: cues[index].endMs, approachStartMs});
+      await waitUntil(page, cueStartNs);
+      await runInspect(plan.beats[index]);
+      const nextDeadline = index + 1 < cues.length ? cues[index + 1].startMs : narrationEndMs;
+      const inspectEnd = Number(process.hrtime.bigint() - originNs) / 1e6;
+      if (inspectEnd > nextDeadline + inspectOverrunMs) throw new Error(`Inspect for cue "${plan.beats[index].cue}" overran the next cue by ${Math.round(inspectEnd - nextDeadline)}ms`);
     }
-    for (let index = 0; index < emphasis.length - 1; index++) emphasis[index].endMs = cues[index + 1].startMs;
+    for (let index = 0; index < emphasis.length - 1; index++) emphasis[index].endMs = emphasis[index + 1].approachStartMs;
     emphasis[emphasis.length - 1].endMs = narrationEndMs;
     await waitUntil(page, originNs + BigInt(Math.round(narrationEndMs * 1e6)));
-    writeFileSync("public/emphasis.json", `${JSON.stringify({demoOffsetMs, transitionMs, beats: emphasis}, null, 2)}\n`);
+    writeFileSync("public/emphasis.json", `${JSON.stringify({demoOffsetMs, transitionMs: approachDurationMs, beats: emphasis}, null, 2)}\n`);
   } catch (error) {
     mkdirSync("artifacts", {recursive: true});
     await page?.screenshot({path: "artifacts/failure.png", fullPage: true}).catch(() => undefined);
