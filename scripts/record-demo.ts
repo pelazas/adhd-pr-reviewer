@@ -1,4 +1,6 @@
 import "dotenv/config";
+import {createServer, type Server} from "node:http";
+import type {AddressInfo} from "node:net";
 import {execFileSync} from "node:child_process";
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
 import {resolve} from "node:path";
@@ -257,6 +259,42 @@ const waitUntil = async (page: Page, targetNs: bigint) => {
 
 const leadMs = (item: Plan["beats"][number]) => item.steps.some((input) => input.action === "goto") ? 5_000 : 2_200;
 
+const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+const githubPull = (targetUrl: string) => {
+  const url = new URL(targetUrl);
+  const match = url.hostname === "github.com" ? url.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)/) : null;
+  return match ? {owner: match[1], repo: match[2], number: match[3]} : null;
+};
+
+const servePrCard = async (targetUrl: string): Promise<{url: string; close: () => Promise<void>}> => {
+  const pull = githubPull(targetUrl);
+  if (!pull) return {url: targetUrl, close: async () => undefined};
+  const data = JSON.parse(execFileSync("gh", ["pr", "view", pull.number, "-R", `${pull.owner}/${pull.repo}`, "--json", "title,body,number,additions,deletions,changedFiles"], {encoding: "utf8"})) as {
+    title: string; body: string; number: number; additions: number; deletions: number; changedFiles: number;
+  };
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(data.title)}</title>
+<style>
+body{margin:0;background:#fff;color:#1f2328;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+header{padding:32px 40px 24px;border-bottom:1px solid #d0d7de}
+.repo{color:#0969da;font-size:20px}
+h1{font-size:34px;font-weight:600;margin:10px 0 12px;line-height:1.25}
+.meta{color:#59636e;font-size:16px}
+article{padding:32px 40px 48px;font-size:20px;line-height:1.55;white-space:pre-wrap;max-width:920px}
+</style></head><body>
+<header><div class="repo">${escapeHtml(pull.owner)}/${escapeHtml(pull.repo)} #${data.number}</div>
+<h1>${escapeHtml(data.title)}</h1>
+<div class="meta">${data.changedFiles} files · +${data.additions} / -${data.deletions}</div></header>
+<article>${escapeHtml(data.body ?? "")}</article></body></html>`;
+  const server: Server = createServer((request, response) => {
+    response.writeHead(200, {"content-type": "text/html; charset=utf-8"});
+    response.end(html);
+  });
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+  const port = (server.address() as AddressInfo).port;
+  return {url: `http://127.0.0.1:${port}/`, close: () => new Promise((done, fail) => server.close((error) => error ? fail(error) : done()))};
+};
+
 const main = async () => {
   const planPath = process.argv[2];
   if (!planPath) throw new Error("Usage: tsx scripts/record-demo.ts <demo-plan.json>");
@@ -274,8 +312,14 @@ const main = async () => {
   const narrationEndMs = narrationDurationMs(captions);
   mkdirSync("artifacts/recordings", {recursive: true});
   mkdirSync("public", {recursive: true});
+  const card = await servePrCard(plan.startUrl);
   const browser = await chromium.launch({headless: true});
-  const context = await browser.newContext({viewport: plan.viewport, recordVideo: {dir: resolve("artifacts/recordings"), size: plan.viewport}});
+  const context = await browser.newContext({
+    viewport: plan.viewport,
+    recordVideo: {dir: resolve("artifacts/recordings"), size: plan.viewport},
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    locale: "en-US",
+  });
   await context.addInitScript(installCursor);
   let page: Page | undefined;
   let video: Awaited<ReturnType<Page["video"]>>;
@@ -290,7 +334,7 @@ const main = async () => {
       for (const input of item.steps.filter((stepInput) => !isSetup(stepInput.action))) await runStep(page!, input, hosts);
     };
 
-    await loadPage(page, plan.startUrl, hosts);
+    await loadPage(page, card.url, hosts);
     await runSetup(plan.beats[0]);
     await approachTarget(page, plan.beats[0].target, plan.viewport.height);
     const first = await measureBeat(page, plan.beats[0], plan.viewport);
@@ -325,6 +369,7 @@ const main = async () => {
   } finally {
     await context.close();
     await browser.close();
+    await card.close();
   }
   if (!video) throw new Error("Playwright did not create a recording");
   const source = await video.path();
