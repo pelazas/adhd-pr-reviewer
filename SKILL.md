@@ -14,21 +14,16 @@ Use this skill when asked to make an ADHD PR review, PR video, brainrot review, 
 
 1. Read the PR with `gh pr view` and identify visible frontend changes. Prefer an existing preview URL; start a local dev server only when no preview exists.
 2. Confirm `gh auth status` and that the target PR can be viewed/commented on before paid TTS or rendering.
-3. Read `prompts/demo-plan.md`, create a JSON plan matching `schemas/demo-plan.schema.json`, then run:
-
-   ```bash
-   npx tsx scripts/record-demo.ts artifacts/demo-plan.json
-   ```
-
-   The plan is declarative: never generate Playwright code. Keep a first-run demo around 35–45 seconds. Clicks and fills require a postcondition. A failure leaves `artifacts/failure.png` and exits non-zero.
-4. Read `prompts/narration.md`, write `artifacts/narration.txt`, then run:
+3. Read `prompts/demo-plan.md`, create a JSON plan matching `schemas/demo-plan.schema.json`. Each beat has one exact narration cue and a target (`role` and `name`, `selector`, or `text`); optional steps occur before that beat holds. Never generate Playwright code. Clicks and fills require a postcondition. A failure leaves `artifacts/failure.png` and exits non-zero.
+4. Read `prompts/narration.md`, write `artifacts/narration.txt`, then run TTS before recording:
 
    ```bash
    npx tsx scripts/generate-tts.ts artifacts/narration.txt
+   npx tsx scripts/record-demo.ts artifacts/demo-plan.json
    npx tsx scripts/render.ts
    ```
 
-   The pipeline loads `ELEVENLABS_API_KEY` from `.env`; never display or commit it. `public/brainrot.mp4` must be a local user-supplied gameplay clip. It is muted, like the demo; narration is the only audio.
+   The recorder matches cues to timestamped caption tokens, finishes each target transition before its cue, and writes `public/emphasis.json`. The pipeline loads `ELEVENLABS_API_KEY` from `.env`; never display or commit it. `public/brainrot.mp4` must be a local user-supplied gameplay clip and plays at volume 0.14. The demo is muted; narration stays full volume.
 5. If the user asked to post, run:
 
    ```bash
@@ -39,7 +34,7 @@ Use this skill when asked to make an ADHD PR review, PR video, brainrot review, 
 
 ## Output rules
 
-- The composition is fixed: 1080×1920, demo at the top, muted looping gameplay at the bottom, captions near the split, and a two-second PR chip.
-- The demo plays once at 1×; its final frame freezes for any remaining narration.
+- The composition is fixed: 1080×1920, demo at the top, looping gameplay at the bottom, captions over the gameplay at the frame bottom, and a two-second PR chip.
+- The demo plays once at 1× after its recorder offset; its final frame freezes for any remaining narration. Zoom and the red highlight identify each beat target.
 - Rendered output is `out/adhd-review-1.mp4`, H.264, and the render script rejects output over 10MB.
-- Do not push, commit secrets, or commit gameplay/video artifacts.
+- Do not push, commit secrets, commit gameplay/video artifacts, or auto-post. Posting is opt-in only.

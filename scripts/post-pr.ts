@@ -27,7 +27,7 @@ const main = () => {
   if (!help.includes("--attach")) {
     throw new Error("This gh build does not support `gh pr comment --attach`. Upgrade gh to 2.99.0+; the local MP4 was kept at out/adhd-review-1.mp4.");
   }
-  writeFileSync("comment.md", "Quick ADHD review: the portfolio now has working Experience, Education, and Contact sections, a warmer visual pass, and the SEO tags doing their quiet office job.\n\n![](out/adhd-review-1.mp4)\n");
+  writeFileSync("comment.md", "Quick ADHD review: the page now actually shows Selected projects, Experience (including Vivra), Education with the AWS cert, and a real Contact form.\n\n![](out/adhd-review-1.mp4)\n");
   const result = execFileSync("gh", ["pr", "comment", "1", "-R", "pelazas/portfolio", "--body-file", "comment.md", "--attach", video], {encoding: "utf8"});
   const url = result.match(/https:\/\/github\.com\/[^\s]+\/issues\/comment\/\d+/)?.[0] ?? result.trim();
   console.log(`Posted PR comment: ${url}`);

@@ -1,11 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["startUrl", "viewport", "steps"],
+  "required": ["startUrl", "viewport", "beats"],
   "properties": {
     "startUrl": {"type": "string", "format": "uri"},
     "viewport": {"type": "object", "required": ["width", "height"], "properties": {"width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}}},
-    "steps": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"oneOf": [
+    "beats": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"type": "object", "required": ["cue", "target"], "properties": {
+      "cue": {"type": "string", "minLength": 1},
+      "target": {"oneOf": [
+        {"type": "object", "required": ["role", "name"], "properties": {"role": {"type": "string", "minLength": 1}, "name": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+        {"type": "object", "required": ["selector"], "properties": {"selector": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+        {"type": "object", "required": ["text"], "properties": {"text": {"type": "string", "minLength": 1}}, "additionalProperties": false}
+      ]},
+      "scale": {"type": "number", "exclusiveMinimum": 0},
+      "wide": {"type": "boolean", "default": false},
+      "steps": {"type": "array", "default": [], "items": {"oneOf": [
       {"type": "object", "required": ["action"], "properties": {"action": {"const": "waitForLoad"}}},
       {"type": "object", "required": ["action", "ms"], "properties": {"action": {"const": "wait"}, "ms": {"type": "integer", "minimum": 0, "maximum": 14000}}},
       {"type": "object", "required": ["action", "y"], "properties": {"action": {"const": "scroll"}, "y": {"type": "number", "minimum": 0}, "durationMs": {"type": "integer", "minimum": 250, "maximum": 14000}}},
@@ -14,6 +23,7 @@
       {"type": "object", "required": ["action", "selector", "value", "postcondition"], "properties": {"action": {"const": "fill"}, "selector": {"type": "string"}, "value": {"type": "string"}, "postcondition": {"type": "object"}}},
       {"type": "object", "required": ["action", "selector"], "properties": {"action": {"const": "hover"}, "selector": {"type": "string"}}},
       {"type": "object", "required": ["action", "key"], "properties": {"action": {"const": "press"}, "key": {"type": "string"}}}
-    ]}}
+      ]}}
+    }, "additionalProperties": false}}
   }
 }

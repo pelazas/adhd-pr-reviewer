@@ -29,8 +29,8 @@ export const Captions: React.FC<{captions: Caption[]}> = ({captions}) => {
 
 const outline = "3px #15110e, 3px 0 #15110e, 0 3px #15110e, -3px 0 #15110e";
 const styles: Record<string, React.CSSProperties> = {
-  wrap: {position: "absolute", top: 1075, left: 50, right: 50, zIndex: 4, textAlign: "center"},
+  wrap: {position: "absolute", bottom: 48, left: 40, right: 40, zIndex: 4, textAlign: "center"},
   line: {fontFamily: "CaptionLocal", fontSize: 56, fontWeight: 700, lineHeight: 1.14, color: "white", whiteSpace: "pre", textShadow: outline},
   word: {color: "#fff", textShadow: outline},
-  active: {color: "#39E508", textShadow: outline},
+  active: {color: "#FF2D20", textShadow: outline},
 };

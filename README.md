@@ -1,6 +1,6 @@
 # ADHD PR Reviewer
 
-Turns a frontend PR into a 1080×1920 review video: recorded demo on top, muted gameplay below, timestamped captions, and ElevenLabs narration. The example targets `pelazas/portfolio#1`.
+Turns a frontend PR into a 1080×1920 review video: a focused demo on top, low-volume gameplay below, bottom word captions, and ElevenLabs narration. The example targets `pelazas/portfolio#1`.
 
 ## Install
 
@@ -33,15 +33,14 @@ Turns a frontend PR into a 1080×1920 review video: recorded demo on top, muted 
 npx tsx scripts/run-example.ts
 ```
 
-It validates GitHub access first, records the demo, requests timestamped TTS, renders `out/adhd-review-1.mp4`, checks it is under 10MB, and posts a PR comment if `gh >= 2.99.0` supports `--attach`.
+It validates GitHub access first, requests timestamped TTS, records the demo against those caption cues, then renders `out/adhd-review-1.mp4` and checks it is under 10MB. It never posts a PR comment.
 
 Or run the stages separately:
 
 ```bash
-npx tsx scripts/record-demo.ts artifacts/examples/portfolio-pr-1.json
 npx tsx scripts/generate-tts.ts artifacts/examples/portfolio-pr-1-narration.txt
+npx tsx scripts/record-demo.ts artifacts/examples/portfolio-pr-1.json
 npx tsx scripts/render.ts
-npx tsx scripts/post-pr.ts
 ```
 
-The large videos, narration, captions, screenshots, `.env`, and output directory are intentionally gitignored. For a new PR, make a valid JSON plan from `prompts/demo-plan.md`, write a specific narration from `prompts/narration.md`, then adapt the PR destination in `scripts/post-pr.ts` before posting.
+The large videos, narration, captions, screenshots, `.env`, and output directory are intentionally gitignored. For a new PR, make a valid beats-and-targets JSON plan from `prompts/demo-plan.md`, write a specific narration from `prompts/narration.md`, generate TTS, record, then render. `public/brainrot.mp4` keeps its audio at volume 0.14; the demo is muted and narration stays full volume. Posting is opt-in via `scripts/post-pr.ts`.
