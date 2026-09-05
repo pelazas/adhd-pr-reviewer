@@ -12,7 +12,7 @@ void Promise.all([
 
 type Props = {captions: Caption[]; emphasis?: Emphasis; demoDurationInFrames?: number};
 
-const defaultEmphasis: Emphasis = {demoOffsetMs: 0, transitionMs: 1600, beats: []};
+const defaultEmphasis: Emphasis = {demoOffsetMs: 0, transitionMs: 1800, beats: []};
 
 const metadata: CalculateMetadataFunction<Props> = async ({props}) => {
   // The MP3 is the source of truth; caption timing may end before its final breath.
@@ -34,7 +34,7 @@ export const ADHDReview: React.FC<Props> = ({captions, emphasis = defaultEmphasi
       <Video src={staticFile("brainrot.mp4")} volume={0.14} loop objectFit="cover" style={mediaStyle} />
     </div>
     <Captions captions={captions} />
-    <Sequence durationInFrames={60} layout="none"><div style={chipStyle}>PR #1 · pelazas/portfolio</div></Sequence>
+    <Sequence durationInFrames={Math.max(1, Math.round(((emphasis.beats[1]?.startMs ?? emphasis.beats[0]?.endMs ?? 10_000) / 1000) * 30))} layout="none"><div style={chipStyle}>PR #1 · pelazas/portfolio</div></Sequence>
     <Audio src={staticFile("narration.mp3")} />
   </div>
 );
