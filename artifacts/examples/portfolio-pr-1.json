@@ -1,12 +1,58 @@
 {
-  "startUrl": "https://portfolio-three-beta-75.vercel.app/",
+  "startUrl": "https://github.com/pelazas/portfolio/pull/1",
   "viewport": {"width": 1080, "height": 1056},
   "beats": [
-    {"cue": "Carlos Pelazas", "target": {"role": "heading", "name": "Carlos Pelazas"}, "scale": 1.08, "wide": true},
-    {"cue": "Selected projects", "target": {"role": "heading", "name": "Selected projects"}, "scale": 1.15},
-    {"cue": "How I build", "target": {"role": "heading", "name": "How I build"}, "scale": 1.15},
-    {"cue": "Experience was", "target": {"role": "heading", "name": "Experience"}, "scale": 1.15},
-    {"cue": "Education follows", "target": {"role": "heading", "name": "Education"}, "scale": 1.15},
-    {"cue": "Contact is", "target": {"role": "heading", "name": "Contact"}, "scale": 1.15}
+    {
+      "cue": "dead code",
+      "target": {"text": "Revamp portfolio: projects, How I build, sections, SEO & polish"},
+      "scale": 1.05,
+      "wide": true,
+      "steps": [
+        {"action": "select", "text": "unused dead code"}
+      ]
+    },
+    {
+      "cue": "live page",
+      "target": {"role": "heading", "name": "Carlos Pelazas"},
+      "scale": 1.05,
+      "wide": true,
+      "steps": [
+        {"action": "goto", "url": "https://pelazas.com/"}
+      ]
+    },
+    {
+      "cue": "How I build",
+      "target": {"role": "heading", "name": "How I build"},
+      "scale": 1.15,
+      "steps": [
+        {"action": "select", "role": "heading", "name": "How I build"}
+      ]
+    },
+    {
+      "cue": "Vivra",
+      "target": {"text": "Vivra"},
+      "scale": 1.14,
+      "steps": [
+        {"action": "select", "text": "Vivra"}
+      ]
+    },
+    {
+      "cue": "AWS cert",
+      "target": {"text": "AWS Certified Solutions Architect"},
+      "scale": 1.14,
+      "steps": [
+        {"action": "select", "text": "AWS Certified Solutions Architect"}
+      ]
+    },
+    {
+      "cue": "Contact is",
+      "target": {"role": "heading", "name": "Contact"},
+      "scale": 1.08,
+      "wide": true,
+      "steps": [
+        {"action": "fill", "selector": "#email", "value": "review@example.com", "postcondition": {"selector": "#email"}},
+        {"action": "fill", "selector": "#message", "value": "checking the form", "postcondition": {"selector": "#message"}}
+      ]
+    }
   ]
 }
