@@ -1,6 +1,6 @@
 import "dotenv/config";
 import {execFileSync} from "node:child_process";
-import {existsSync, statSync, writeFileSync} from "node:fs";
+import {existsSync, readFileSync, statSync} from "node:fs";
 
 const minimumGh = [2, 99, 0];
 const compareVersions = (actual: number[]) => {
@@ -27,7 +27,9 @@ const main = () => {
   if (!help.includes("--attach")) {
     throw new Error("This gh build does not support `gh pr comment --attach`. Upgrade gh to 2.99.0+; the local MP4 was kept at out/adhd-review-1.mp4.");
   }
-  writeFileSync("comment.md", "Review take: Experience, Education, and Contact were already written and sitting unused. This PR mounts them, plus How I build.\n\n![](out/adhd-review-1.mp4)\n");
+  if (!existsSync("comment.md") || !readFileSync("comment.md", "utf8").trim()) {
+    throw new Error("Missing comment.md; write the review take before posting.");
+  }
   const result = execFileSync("gh", ["pr", "comment", "1", "-R", "pelazas/portfolio", "--body-file", "comment.md", "--attach", video], {encoding: "utf8"});
   const url = result.match(/https:\/\/github\.com\/[^\s]+\/issues\/comment\/\d+/)?.[0] ?? result.trim();
   console.log(`Posted PR comment: ${url}`);
