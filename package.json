@@ -30,6 +30,7 @@
   },
   "scripts": {
     "dev": "remotion studio",
+    "pr-brief": "tsx scripts/fetch-pr-brief.ts",
     "record-demo": "tsx scripts/record-demo.ts",
     "generate-tts": "tsx scripts/generate-tts.ts",
     "render-review": "tsx scripts/render.ts",

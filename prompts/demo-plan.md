@@ -1,5 +1,7 @@
 # Demo-plan prompt
 
+Read `artifacts/pr-brief.txt` first. Choose inspect beats from the UI those hunks imply. Do not target filenames.
+
 Write `artifacts/demo-plan.json`, never Playwright code. Follow `schemas/demo-plan.schema.json`.
 
 - Provide 1–8 `beats`, in narration order. Every beat needs a `cue` that appears exactly once in the generated captions and a `target`: `{role, name}`, `{selector}`, or `{text}`. The target is the framed element after the recorder glides the cursor there.

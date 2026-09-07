@@ -267,6 +267,11 @@ const githubPull = (targetUrl: string) => {
   return match ? {owner: match[1], repo: match[2], number: match[3]} : null;
 };
 
+export const prChipLabel = (startUrl: string) => {
+  const pull = githubPull(startUrl);
+  return pull ? `PR #${pull.number} · ${pull.owner}/${pull.repo}` : undefined;
+};
+
 const servePrCard = async (targetUrl: string): Promise<{url: string; close: () => Promise<void>}> => {
   const pull = githubPull(targetUrl);
   if (!pull) return {url: targetUrl, close: async () => undefined};
@@ -361,7 +366,7 @@ const main = async () => {
     for (let index = 0; index < emphasis.length - 1; index++) emphasis[index].endMs = emphasis[index + 1].approachStartMs;
     emphasis[emphasis.length - 1].endMs = narrationEndMs;
     await waitUntil(page, originNs + BigInt(Math.round(narrationEndMs * 1e6)));
-    writeFileSync("public/emphasis.json", `${JSON.stringify({demoOffsetMs, transitionMs: approachDurationMs, beats: emphasis}, null, 2)}\n`);
+    writeFileSync("public/emphasis.json", `${JSON.stringify({demoOffsetMs, transitionMs: approachDurationMs, beats: emphasis, prLabel: prChipLabel(plan.startUrl)}, null, 2)}\n`);
   } catch (error) {
     mkdirSync("artifacts", {recursive: true});
     await page?.screenshot({path: "artifacts/failure.png", fullPage: true}).catch(() => undefined);
@@ -379,4 +384,6 @@ const main = async () => {
   console.log("Created public/demo.mp4, public/demo-last.png, and public/emphasis.json");
 };
 
-main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+if (process.argv[1]?.endsWith("record-demo.ts")) {
+  main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+}

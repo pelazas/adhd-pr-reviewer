@@ -34,7 +34,7 @@ export const ADHDReview: React.FC<Props> = ({captions, emphasis = defaultEmphasi
       <Video src={staticFile("brainrot.mp4")} volume={0.14} loop objectFit="cover" style={mediaStyle} />
     </div>
     <Captions captions={captions} />
-    <Sequence durationInFrames={Math.max(1, Math.round(((emphasis.beats[1]?.startMs ?? emphasis.beats[0]?.endMs ?? 10_000) / 1000) * 30))} layout="none"><div style={chipStyle}>PR #1 · pelazas/portfolio</div></Sequence>
+    {emphasis.prLabel ? <Sequence durationInFrames={Math.max(1, Math.round(((emphasis.beats[1]?.startMs ?? emphasis.beats[0]?.endMs ?? 10_000) / 1000) * 30))} layout="none"><div style={chipStyle}>{emphasis.prLabel}</div></Sequence> : null}
     <Audio src={staticFile("narration.mp3")} />
   </div>
 );
