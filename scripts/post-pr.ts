@@ -27,6 +27,12 @@ export const resolvePrRef = (argv: string[], env: {ADHD_PR?: string}): string[] 
   return parsePrRef(ref);
 };
 
+export const requireComment = (path = "comment.md") => {
+  if (!existsSync(path) || !readFileSync(path, "utf8").trim()) {
+    throw new Error(`Missing ${path}; write the review take before posting.`);
+  }
+};
+
 const main = () => {
   const prArgs = resolvePrRef(process.argv, process.env);
   const video = "out/adhd-review-1.mp4";
@@ -44,9 +50,7 @@ const main = () => {
   if (!help.includes("--attach")) {
     throw new Error("This gh build does not support `gh pr comment --attach`. Upgrade gh to 2.99.0+; the local MP4 was kept at out/adhd-review-1.mp4.");
   }
-  if (!existsSync("comment.md") || !readFileSync("comment.md", "utf8").trim()) {
-    throw new Error("Missing comment.md; write the review take before posting.");
-  }
+  requireComment();
   const result = execFileSync("gh", ["pr", "comment", ...prArgs, "--body-file", "comment.md", "--attach", video], {encoding: "utf8"});
   const url = result.match(/https:\/\/github\.com\/[^\s]+\/issues\/comment\/\d+/)?.[0] ?? result.trim();
   console.log(`Posted PR comment: ${url}`);
