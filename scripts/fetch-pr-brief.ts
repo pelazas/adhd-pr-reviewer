@@ -95,14 +95,27 @@ const oneSentence = (title: string, body: string) => {
   return sentence.length > 150 ? `${sentence.slice(0, 147).replace(/\s+\S*$/, "")}…` : sentence;
 };
 
+const toFile = (file: {path?: string; filename?: string; additions?: number; deletions?: number}): PrFile | null => {
+  const path = file.path || file.filename || "";
+  return path ? {path, additions: file.additions ?? 0, deletions: file.deletions ?? 0} : null;
+};
+
 const toFiles = (pr: PrJson): PrFile[] =>
-  (pr.files ?? [])
-    .map((file) => ({
-      path: file.path || file.filename || "",
-      additions: file.additions ?? 0,
-      deletions: file.deletions ?? 0,
-    }))
-    .filter((file) => file.path);
+  (pr.files ?? []).map(toFile).filter((file): file is PrFile => Boolean(file));
+
+export const parseNdjsonFiles = (raw: string): PrFile[] => {
+  const files: PrFile[] = [];
+  for (const line of raw.split("\n")) {
+    if (!line) continue;
+    try {
+      const file = toFile(JSON.parse(line) as {path?: string; filename?: string; additions?: number; deletions?: number});
+      if (file) files.push(file);
+    } catch {
+      /* skip a broken NDJSON line */
+    }
+  }
+  return files;
+};
 
 const rank = (files: PrFile[], frontend: boolean) =>
   files
@@ -162,6 +175,28 @@ const gh = (args: string[]) => {
   }
 };
 
+const completeFiles = (pr: PrJson): void => {
+  const match = /github\.com\/([^/]+)\/([^/]+)\/pull\/\d+/.exec(pr.url || "");
+  if (!match || pr.number == null) return;
+  try {
+    const files = parseNdjsonFiles(
+      gh([
+        "api",
+        "--paginate",
+        `repos/${match[1]}/${match[2]}/pulls/${pr.number}/files`,
+        "--jq",
+        ".[] | {path: .filename, additions, deletions}",
+      ]),
+    );
+    if (!files.length) return;
+    pr.files = files;
+    if (pr.changedFiles == null || files.length > pr.changedFiles) pr.changedFiles = files.length;
+  } catch (error) {
+    const stderr = (error instanceof Error ? error.message : String(error)).split("\n")[0];
+    console.error(`(warn: gh api files failed; keeping pr view's files: ${stderr})`);
+  }
+};
+
 const main = () => {
   const ref = process.argv[2];
   if (!ref) throw new Error("Usage: tsx scripts/fetch-pr-brief.ts <url | owner/repo#N>");
@@ -175,6 +210,7 @@ const main = () => {
   } catch {
     throw new Error("gh pr view returned unparseable JSON");
   }
+  completeFiles(pr);
   mkdirSync("artifacts", {recursive: true});
   writeFileSync("artifacts/pr-brief.txt", buildBrief(pr, diff));
   console.log("Wrote artifacts/pr-brief.txt");

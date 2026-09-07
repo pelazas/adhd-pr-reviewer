@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {buildBrief, isFrontend, isNoise, parsePrRef, renderHunk} from "./fetch-pr-brief";
+import {buildBrief, isFrontend, isNoise, parseNdjsonFiles, parsePrRef, renderHunk} from "./fetch-pr-brief";
 
 assert.equal(isNoise("package-lock.json"), true);
 assert.equal(isNoise("dist/app.js.map"), true);
@@ -77,5 +77,23 @@ const backendOnly = buildBrief({
 assert.match(backendOnly, /No frontend-looking files/);
 assert.match(backendOnly, /server\/db\.go/);
 assert.doesNotMatch(backendOnly, /template/);
+
+assert.deepEqual(
+  parseNdjsonFiles('{"filename":"src/App.tsx","additions":1,"deletions":0}\n{"path":"src/ui.ts","additions":2,"deletions":1}\nnot-json\n'),
+  [
+    {path: "src/App.tsx", additions: 1, deletions: 0},
+    {path: "src/ui.ts", additions: 2, deletions: 1},
+  ],
+);
+
+const fromFilename = buildBrief({
+  number: 3,
+  title: "Add hello heading",
+  body: "Shows a heading on the home page.",
+  url: "https://github.com/acme/app/pull/3",
+  files: [{filename: "src/App.tsx", additions: 1, deletions: 0}],
+}, diff);
+assert.match(fromFilename, /src\/App\.tsx/);
+assert.match(fromFilename, /Hello/);
 
 console.log("ok");
