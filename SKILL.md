@@ -12,10 +12,16 @@ Use this skill when asked to make an ADHD PR review, PR video, brainrot review, 
 
 ## Workflow
 
-1. Read the PR with `gh pr view` and identify visible frontend changes. Prefer an existing preview URL; start a local dev server only when no preview exists.
+1. Ingest the PR, then pick a preview. Do not invent the PR.
+
+   ```bash
+   npx tsx scripts/fetch-pr-brief.ts <url | owner/repo#N>
+   ```
+
+   Read `artifacts/pr-brief.txt`. Prefer a preview URL from the body or comments; start a local dev server only when none exists. If the script exits 1, stop.
 2. Confirm `gh auth status` and that the target PR can be viewed/commented on before paid TTS or rendering.
-3. Read `prompts/demo-plan.md`, create a JSON plan matching `schemas/demo-plan.schema.json`. First beat is the GitHub PR (`startUrl`; private PRs render a local card via `gh pr view`); a later beat `goto`s the preview. Each beat has one exact narration cue and a target (`role` and `name`, `selector`, or `text`). Setup steps (`goto`, `waitForLoad`, `wait`, `scroll`) run before the cursor approaches; inspect steps (`click`, `fill`, `select`, `hover`, `press`) run during the beat. Never generate Playwright code. Clicks and fills require a postcondition. A failure leaves `artifacts/failure.png` and exits non-zero.
-4. Read `prompts/narration.md`, write `artifacts/narration.txt`, then run TTS before recording:
+3. Read `prompts/demo-plan.md` and `artifacts/pr-brief.txt`, then create a JSON plan matching `schemas/demo-plan.schema.json`. First beat is the GitHub PR (`startUrl`; private PRs render a local card via `gh pr view`); a later beat `goto`s the preview. Each beat has one exact narration cue and a target (`role` and `name`, `selector`, or `text`). Setup steps (`goto`, `waitForLoad`, `wait`, `scroll`) run before the cursor approaches; inspect steps (`click`, `fill`, `select`, `hover`, `press`) run during the beat. Never generate Playwright code. Clicks and fills require a postcondition. A failure leaves `artifacts/failure.png` and exits non-zero.
+4. Read `prompts/narration.md` and `artifacts/pr-brief.txt`, write `artifacts/narration.txt`, then run TTS before recording:
 
    ```bash
    npx tsx scripts/generate-tts.ts artifacts/narration.txt
