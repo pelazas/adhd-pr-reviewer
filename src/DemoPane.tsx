@@ -11,7 +11,7 @@ export type EmphasisBeat = {
   approachStartMs?: number;
 };
 
-export type Emphasis = {demoOffsetMs: number; transitionMs?: number; beats: EmphasisBeat[]};
+export type Emphasis = {demoOffsetMs: number; transitionMs?: number; beats: EmphasisBeat[]; prLabel?: string};
 
 type Props = {emphasis: Emphasis; demoDurationInFrames: number};
 type Camera = {scale: number; tx: number; ty: number};
