@@ -3,6 +3,8 @@ import {execFileSync} from "node:child_process";
 import {existsSync, readFileSync, statSync} from "node:fs";
 
 const minimumGh = [2, 99, 0];
+const USAGE = "Usage: tsx scripts/post-pr.ts <url | owner/repo#N>";
+
 const compareVersions = (actual: number[]) => {
   for (let index = 0; index < minimumGh.length; index++) {
     if (actual[index] > minimumGh[index]) return 1;
@@ -11,13 +13,28 @@ const compareVersions = (actual: number[]) => {
   return 0;
 };
 
+export const parsePrRef = (ref: string): string[] => {
+  const fromUrl = /github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/.exec(ref);
+  if (fromUrl) return [ref];
+  const short = /^([^/]+)\/([^#]+)#(\d+)$/.exec(ref);
+  if (short) return [short[3], "-R", `${short[1]}/${short[2]}`];
+  throw new Error(USAGE);
+};
+
+export const resolvePrRef = (argv: string[], env: {ADHD_PR?: string}): string[] => {
+  const ref = argv[2] || env.ADHD_PR;
+  if (!ref) throw new Error(USAGE);
+  return parsePrRef(ref);
+};
+
 const main = () => {
+  const prArgs = resolvePrRef(process.argv, process.env);
   const video = "out/adhd-review-1.mp4";
   if (!existsSync(video)) throw new Error(`Missing ${video}; render locally before posting.`);
   const probedBytes = Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=size", "-of", "default=noprint_wrappers=1:nokey=1", video], {encoding: "utf8"}).trim());
   if (!Number.isFinite(probedBytes) || probedBytes !== statSync(video).size || probedBytes > 10 * 1024 * 1024) throw new Error("Refusing to post: ffprobe reports a video over 10MB. Re-run scripts/render.ts to re-encode it.");
   execFileSync("gh", ["auth", "status"], {stdio: "inherit"});
-  execFileSync("gh", ["pr", "view", "1", "-R", "pelazas/portfolio", "--json", "url,state"], {stdio: "inherit"});
+  execFileSync("gh", ["pr", "view", ...prArgs, "--json", "url,state"], {stdio: "inherit"});
   const version = execFileSync("gh", ["--version"], {encoding: "utf8"}).match(/gh version (\d+)\.(\d+)\.(\d+)/);
   const actual = version ? version.slice(1).map(Number) : [];
   if (actual.length !== 3 || compareVersions(actual) < 0) {
@@ -30,9 +47,11 @@ const main = () => {
   if (!existsSync("comment.md") || !readFileSync("comment.md", "utf8").trim()) {
     throw new Error("Missing comment.md; write the review take before posting.");
   }
-  const result = execFileSync("gh", ["pr", "comment", "1", "-R", "pelazas/portfolio", "--body-file", "comment.md", "--attach", video], {encoding: "utf8"});
+  const result = execFileSync("gh", ["pr", "comment", ...prArgs, "--body-file", "comment.md", "--attach", video], {encoding: "utf8"});
   const url = result.match(/https:\/\/github\.com\/[^\s]+\/issues\/comment\/\d+/)?.[0] ?? result.trim();
   console.log(`Posted PR comment: ${url}`);
 };
 
-main();
+if (process.argv[1]?.endsWith("post-pr.ts")) {
+  main();
+}
