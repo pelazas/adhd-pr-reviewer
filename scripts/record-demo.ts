@@ -267,6 +267,11 @@ const githubPull = (targetUrl: string) => {
   return match ? {owner: match[1], repo: match[2], number: match[3]} : null;
 };
 
+export const prChipLabel = (startUrl: string) => {
+  const pull = githubPull(startUrl);
+  return pull ? `PR #${pull.number} · ${pull.owner}/${pull.repo}` : undefined;
+};
+
 const servePrCard = async (targetUrl: string): Promise<{url: string; close: () => Promise<void>}> => {
   const pull = githubPull(targetUrl);
   if (!pull) return {url: targetUrl, close: async () => undefined};
@@ -379,4 +384,6 @@ const main = async () => {
   console.log("Created public/demo.mp4, public/demo-last.png, and public/emphasis.json");
 };
 
-main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+if (process.argv[1]?.endsWith("record-demo.ts")) {
+  main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+}
