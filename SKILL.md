@@ -24,13 +24,13 @@ Use this skill when asked to make an ADHD PR review, PR video, brainrot review, 
    ```
 
    The recorder matches cues to timestamped caption tokens, glides a visible cursor to each target, and writes `public/emphasis.json`. The pipeline loads `ELEVENLABS_API_KEY` from `.env`; never display or commit it. `public/brainrot.mp4` must be a local user-supplied gameplay clip and plays at volume 0.14. The demo is muted; narration stays full volume.
-5. If the user asked to post, run:
+5. If the user asked to post, write the review take to `comment.md`, then run:
 
    ```bash
-   npx tsx scripts/post-pr.ts
+   npx tsx scripts/post-pr.ts <url | owner/repo#N>
    ```
 
-   This example posts to `pelazas/portfolio#1`. For another repository or PR, update the two constants in `scripts/post-pr.ts` deliberately before posting. It requires `gh >= 2.99.0` with `--attach`; if unavailable, report the upgrade requirement and retain the local MP4.
+   Posting is opt-in. The script posts the existing `comment.md` and `out/adhd-review-1.mp4` to that PR and does not overwrite the take. `ADHD_PR` can supply the same ref if argv is omitted. It requires `gh >= 2.99.0` with `--attach`; if unavailable, report the upgrade requirement and retain the local MP4.
 
 ## Output rules
 
